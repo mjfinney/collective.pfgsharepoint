@@ -1,0 +1,3 @@
+========================collective.pfgsharepoint
+========================
+User documentation

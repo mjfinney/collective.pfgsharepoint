@@ -1,0 +1,36 @@
+<configure
+    xmlns="http://namespaces.zope.org/zope"
+    xmlns:browser="http://namespaces.zope.org/browser"
+    xmlns:plone="http://namespaces.plone.org/plone"
+    i18n_domain="collective.pfgsharepoint">
+
+  <!-- Set overrides folder for Just-a-Bunch-Of-Templates product -->
+  <include package="z3c.jbot" file="meta.zcml" />
+  <browser:jbot
+      directory="overrides"
+      layer="collective.pfgsharepoint.interfaces.ICollectivePfgsharepointLayer"
+      />
+
+  <!-- Publish static files -->
+  <plone:static
+      name="collective.pfgsharepoint"
+      type="plone"
+      directory="static"
+      />
+
+  <browser:page 
+    name="pfgsharepoint-settings"
+    for="Products.CMFPlone.interfaces.IPloneSiteRoot"
+    class=".config.PFGSharePointConfigControlPanel"
+    permission="cmf.ManagePortal"
+    />
+
+  <browser:page 
+    name="sharepoint-auth"
+    for="Products.CMFPlone.interfaces.IPloneSiteRoot"
+    class=".auth.SharePointAuthView"
+    template="auth.pt"
+    permission="cmf.ManagePortal"
+    />
+
+</configure>

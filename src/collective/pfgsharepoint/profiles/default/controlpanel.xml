@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<object
+    name="portal_controlpanel"
+    xmlns:i18n="http://xml.zope.org/namespaces/i18n"
+    i18n:domain="collective.pfgsharepoint"
+    purge="False">
+    
+    <configlet
+        title="PFG Sharepoint Adapter"
+        action_id="pfgsharepointsettings"
+        appId="collective.pfgsharepoint" 
+        category="Products"
+        condition_expr=""
+        url_expr="string:${portal_url}/@@pfgsharepoint-settings"
+        icon_expr=""
+        visible="True"
+        i18n:attributes="title">
+            <permission>Manage portal</permission>
+    </configlet>
+
+</object>
