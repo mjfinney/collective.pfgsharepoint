@@ -13,10 +13,10 @@ _ = MessageFactory('collective.pfgsharepoint')
 PROJECTNAME = 'collective.pfgsharepoint'
 
 def initialize(context):
+    import content.sharepoint_adapter
     listOfTypes = atapi.listTypes(PROJECTNAME)
     content_types, constructors, ftis = atapi.process_types(listOfTypes, PROJECTNAME)
     for atype, constructor in zip(content_types, constructors):
-        print atype, contstructor
         if atype.portal_type == 'SharePointAdapter':
             permission = ADD_CONTENT_PERMISSION
         else:

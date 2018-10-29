@@ -26,7 +26,7 @@
     />
 
   <browser:page 
-    name="sharepoint-auth"
+    name="sharepoint-permissions"
     for="Products.CMFPlone.interfaces.IPloneSiteRoot"
     class=".auth.SharePointAuthView"
     template="auth.pt"

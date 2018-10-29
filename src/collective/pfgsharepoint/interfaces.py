@@ -20,12 +20,17 @@ class IPFGSharePointConfig(Interface):
                            required=False,
                            )
 
-    domain = schema.TextLine(title=_(u"SharePoint Domain"),
-                         description=_(u'This is something like "company.sharepoint.com"'),
-                         required=False,
-                         )
+    clientsecret = schema.Password(title=_(u"Microsoft App Client Secret"),
+                           description=_(u'You can generate a new password here: https://apps.dev.microsoft.com/.'),
+                           required=False,
+                           )
 
-    token = schema.TextLine(title=_(u"Microsoft Graph API Token"),
-                        description=_(u'This is created once the app is allowed access to SharePoint.'),
-                        required=False,
-                        )
+    tenants = schema.Dict(title=_(u"SharePoint Tenants"),
+                          description=_(u"This setting should only be modified by visiting the @@sharepoint-permissions page"),
+                          required=False,
+                          key_type=schema.TextLine(title=_(u"Tenant GUID")),
+                          value_type=schema.Dict(title=_("Tenant Properties"),
+                                                 key_type=schema.TextLine(title=_(u"Tenant Property")),
+                                                 value_type=schema.TextLine(title=_(u"Tenant Property Value"), required=False),
+                                                 ),
+                          )

@@ -6,11 +6,21 @@ from Products.CMFCore import utils as cmf_utils
 from Products.CMFCore.permissions import ModifyPortalContent
 from Products.PloneFormGen.content.actionAdapter import FormActionAdapter
 from Products.PloneFormGen.content.actionAdapter import FormAdapterSchema
+from collective.pfgsharepoint import PROJECTNAME
 
 from plone.api.portal import get_registry_record
 from collective.pfgsharepoint.interfaces import IPFGSharePointConfig
 
 SharePointAdapterSchema = FormAdapterSchema.copy() + atapi.Schema((
+    atapi.StringField('sharepoint_tenant',
+                      required=True,
+                      write_permission=ModifyPortalContent,
+                      read_permission=ModifyPortalContent,
+                      widget=atapi.SelectionWidget(
+                          label=u'SharePoint Tenant',
+                          description=(u''
+                              u' and run this query and replace {HOST} and {PATH TO SITE} with the path to the sharepoint site: https://graph.microsoft.com/v1.0/sites/{HOST}:/sites/{PATH TO SITE}/?$select=id')
+                      )),
     atapi.StringField('sharepoint_site',
                       required=True,
                       write_permission=ModifyPortalContent,
@@ -40,6 +50,17 @@ class SharePointAdapter(FormActionAdapter):
     portal_type = meta_type = 'SharePointAdapter'
     archetype_name = 'SharePoint Adapter'
 
+    def getSites(self, tenantid):
+        """return List of sites"""
+        sitelist = []
+        return sitelist
+
+    def getLists(self, tenantid, siteid):
+        """return List of Lists"""
+        list_o_lists = []
+        return list_o_lists
+
+
     security = ClassSecurityInfo()
 
     security.declarePrivate('onSuccess')
@@ -53,7 +74,7 @@ class SharePointAdapter(FormActionAdapter):
             newsletters = self.subscriptions
         else:
             newsletters = REQUEST.form.get(self.newsletters_field, '')
-        api_key = pprops.tpwd_properties.govdelivery_api_key
+        #api_key = pprops.tpwd_properties.govdelivery_api_key
         if not token:
             raise ValueError('The SharePoint token is not set.')
         if not self.sharepoint_list:
@@ -68,4 +89,4 @@ class SharePointAdapter(FormActionAdapter):
         resp = requests.get(url, headers=headers, timeout=2)
         resp.raise_for_status()
 
-registerATCT(SharePointAdapter, 'collective.pfgsharepoint')
+registerATCT(SharePointAdapter, PROJECTNAME)
