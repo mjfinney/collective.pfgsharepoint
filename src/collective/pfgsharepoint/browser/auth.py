@@ -6,16 +6,26 @@ from collective.pfgsharepoint.interfaces import IPFGSharePointConfig
 
 class SharePointAuthView(BrowserView):
 
-    def getAuthUrl():
-        portal_url = portal.get().absolute_url()
-        tenant = get_registry_record(interface=IPFGSharePointConfig, name='domain')
-        clientid = get_registry_record(interface=IPFGSharePointConfig, name='clientid')
-        auth_url = "https://login.microsoftonline.com/"
-        auth_url +=  tenant
-        auth_url += '/adminconsent?client_id=' + clientid
-        auth_url += '&redirect_uri=' + portal_url + '/@@sharepoint-auth'
-        return auth_url
+    def __call__(self):
+        tenant = self.request.form.get('tenant')
+        tenant = unicode(tenant)
+        consent = self.request.form.get('admin_consent')
+        if tenant and consent and consent.lower() == "true":
+            #tenant is GUID
+            tenants = portal.get_registry_record(interface=IPFGSharePointConfig, name='tenants')
+            if not tenants:
+                tenants = {}
+            if tenant not in tenants:
+                tenants[tenant] = {}
+                tenants[tenant][u'token'] = u''
+                portal.set_registry_record(interface=IPFGSharePointConfig, name='tenants', value=tenants)
+        return self.index()
 
-    def getAuthToken():
-        portal.set_registry_record(value='', interface=IPFGSharePointConfig, name="domain")
-        return ''
+
+    def getAuthUrl(self):
+        portal_url = portal.get().absolute_url()
+        clientid = portal.get_registry_record(interface=IPFGSharePointConfig, name='clientid')
+        auth_url = "https://login.microsoftonline.com/common"
+        auth_url += '/adminconsent?client_id=' + clientid
+        auth_url += '&redirect_uri=' + portal_url + '/@@sharepoint-permissions'
+        return auth_url
