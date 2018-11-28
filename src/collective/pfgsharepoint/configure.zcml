@@ -44,6 +44,16 @@
       name="collective.pfgsharepoint-hiddenprofiles"
       />
 
+  <utility
+    component=".vocabularies.SharepointTenantVocabularyFactory"
+    name="collective.pfgsharepoint.vocabularies.SharepointTenants"
+    />
+
+  <utility
+    component=".vocabularies.SharepointSiteVocabularyFactory"
+    name="collective.pfgsharepoint.vocabularies.SharepointSites"
+    />
+
   <!-- -*- extra stuff goes here -*- -->
 
 </configure>

@@ -2,6 +2,7 @@ from Products.Five.browser import BrowserView
 from zope.component import queryUtility
 from plone.registry.interfaces import IRegistry
 from plone.app.registry.browser import controlpanel
+#from z3c.form.interfaces import DISPLAY_MODE
 
 from collective.pfgsharepoint.interfaces import IPFGSharePointConfig
 from collective.pfgsharepoint import _
@@ -16,6 +17,11 @@ class PFGSharePointConfigForm(controlpanel.RegistryEditForm):
     schema = IPFGSharePointConfig
     label = _(u"PFG SharePoint Settings")
     description = _(u"Use the settings below to configure the PFG SharePoint Adapter")
+
+#    def updateWidgets(self):
+#        super(PFGSharePointConfigForm, self).updateWidgets()
+#        #self.widgets["tenants"].mode = DISPLAY_MODE
+
 
     def updateFields(self):
         super(PFGSharePointConfigForm, self).updateFields()
