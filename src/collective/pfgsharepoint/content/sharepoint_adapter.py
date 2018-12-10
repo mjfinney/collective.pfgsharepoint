@@ -115,8 +115,9 @@ class SharePointAdapter(FormActionAdapter):
         list_o_lists = []
         if sharepoint:
             site = self.getSharepointSite()
-            for l in site.getLists():
-                list_o_lists.append((l.id, l.displayName + ' ' + l.webUrl ))
+            if site:
+                for l in site.getLists():
+                    list_o_lists.append((l.id, l.displayName + ' ' + l.webUrl ))
         return atapi.DisplayList(list_o_lists)
 
     def getColumns(self):
