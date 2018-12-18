@@ -1,4 +1,6 @@
+from datetime import datetime
 import re
+from urllib import quote_plus
 
 import requests
 
@@ -6,6 +8,7 @@ from AccessControl import ClassSecurityInfo
 from Products.ATContentTypes.content.base import registerATCT
 from Products.Archetypes import atapi
 from Products.CMFCore.permissions import ModifyPortalContent
+from Products.PloneFormGen.config import FORM_ERROR_MARKER
 from Products.PloneFormGen.content.actionAdapter import FormActionAdapter
 from Products.PloneFormGen.content.actionAdapter import FormAdapterSchema
 from Products.DataGridField.DataGridField import DataGridField
@@ -62,7 +65,9 @@ SharePointAdapterSchema = FormAdapterSchema.copy() + atapi.Schema((
                       read_permission=ModifyPortalContent,
                       widget=atapi.StringWidget(
                           label=u'Filename Format String',
-                          description=u'The name the xml fromt template will be uploaded as. The form fields are available using the python string format e.g. {field-id}',
+                          description=u'The name the xml fromt template will be uploaded as. \
+                                        The form fields are available using the python string format e.g. {field-id} \
+                                        Use {now} for the submission datetime.',
                       )),
     atapi.TextField('xml_template',
                       required=False,
@@ -247,8 +252,13 @@ class SharePointAdapter(FormActionAdapter):
                 xml_vars[x['xml_variable']] = REQUEST.form.get(x['pfg_field'])
             formatted = template.format(**xml_vars)
             drive = Drive(id=drive, client=sharepoint.client)
-            filename = self.getFilename_string().format(**REQUEST.form)
+            now = datetime.now().strftime('%y-%m-%d-%H-%M-%S-%f')
+            filename = self.getFilename_string().format(now=now, **REQUEST.form)
+            filename = filename.replace(':', '-')
+            filename = quote_plus(filename)
             response = drive.upload(filename, formatted)
+            if not response.ok:
+                return {FORM_ERROR_MARKER: 'Something went wrong. You will need to try to submit again or correct any errors below.'}
 
 
         #target_list = self.getSharepointList()
