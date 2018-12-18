@@ -1,23 +1,26 @@
+import re
+
 import requests
+
 from AccessControl import ClassSecurityInfo
 from Products.ATContentTypes.content.base import registerATCT
 from Products.Archetypes import atapi
-from Products.CMFCore import utils as cmf_utils
 from Products.CMFCore.permissions import ModifyPortalContent
 from Products.PloneFormGen.content.actionAdapter import FormActionAdapter
 from Products.PloneFormGen.content.actionAdapter import FormAdapterSchema
-from collective.pfgsharepoint import PROJECTNAME
-
 from Products.DataGridField.DataGridField import DataGridField
 from Products.DataGridField.DataGridWidget import DataGridWidget
 from Products.DataGridField.Column import Column
 from Products.DataGridField.SelectColumn import SelectColumn
-
 from plone.api.portal import get_registry_record
-from collective.pfgsharepoint.interfaces import IPFGSharePointConfig
+from zope.annotation.interfaces import IAnnotations
 
 from msgraph.client import Client
 from msgraph.sharepoint import Sharepoint
+from msgraph.drives import Drive
+
+from collective.pfgsharepoint import PROJECTNAME
+from collective.pfgsharepoint.interfaces import IPFGSharePointConfig
 
 SharePointAdapterSchema = FormAdapterSchema.copy() + atapi.Schema((
     atapi.StringField('sharepoint_tenant',
@@ -44,6 +47,31 @@ SharePointAdapterSchema = FormAdapterSchema.copy() + atapi.Schema((
                       widget=atapi.SelectionWidget(
                           label=u'SharePoint List ID',
                       )),
+    atapi.StringField('sharepoint_drive',
+                      required=False,
+                      write_permission=ModifyPortalContent,
+                      read_permission=ModifyPortalContent,
+                      vocabulary='getDrives',
+                      widget=atapi.SelectionWidget(
+                          label=u'SharePoint Document Library AKA Drive ID',
+                          description=u'This is where an XML document will be uploaded using the XML Form Template.',
+                      )),
+    atapi.StringField('filename_string',
+                      required=False,
+                      write_permission=ModifyPortalContent,
+                      read_permission=ModifyPortalContent,
+                      widget=atapi.StringWidget(
+                          label=u'Filename Format String',
+                          description=u'The name the xml fromt template will be uploaded as. The form fields are available using the python string format e.g. {field-id}',
+                      )),
+    atapi.TextField('xml_template',
+                      required=False,
+                      write_permission=ModifyPortalContent,
+                      read_permission=ModifyPortalContent,
+                      widget=atapi.TextAreaWidget(
+                          label=u'XML Form Template',
+                          description=u'This is only used with the Document Library.',
+                      )),
     DataGridField(
         name='field_map',
         widget=DataGridWidget(
@@ -54,11 +82,13 @@ SharePointAdapterSchema = FormAdapterSchema.copy() + atapi.Schema((
                                           vocabulary='fgFieldsDisplayList',),
                 'sharepoint_column': SelectColumn(u'Sharepoint Column',
                                                   vocabulary='getColumns'),
+                'xml_variable': SelectColumn(u'XML Template Variable',
+                                                  vocabulary='getXMLVariables'),
                 },
             ),
         allow_empty_rows=False,
         required=False,
-        columns=('pfg_field', 'sharepoint_column'),
+        columns=('pfg_field', 'sharepoint_column', 'xml_variable'),
     ),
 
 ))
@@ -71,64 +101,131 @@ class SharePointAdapter(FormActionAdapter):
     portal_type = meta_type = 'SharePointAdapter'
     archetype_name = 'SharePoint Adapter'
 
+    def getCacheKey(self, key):
+        key = "sharepoint-" + key + self.UID()
+
+        cache = IAnnotations(self.REQUEST)
+        return (cache, key, cache.get(key, None))
+
     def getSharepoint(self):
-        clientid = get_registry_record(interface=IPFGSharePointConfig,
-                                       name='clientid')
-        clientsecret = get_registry_record(interface=IPFGSharePointConfig,
-                                           name='clientsecret')
-        tenantid = self.getSharepoint_tenant()
-        if tenantid:
-            client = Client(clientid, tenantid, clientsecret)
-            return Sharepoint(client)
-        else:
-            return None
+        cache, key, data = self.getCacheKey('sharepoint')
+        if not data:
+            clientid = get_registry_record(interface=IPFGSharePointConfig,
+                                           name='clientid')
+            clientsecret = get_registry_record(interface=IPFGSharePointConfig,
+                                               name='clientsecret')
+            tenantid = self.getSharepoint_tenant()
+            if tenantid:
+                client = Client(clientid, tenantid, clientsecret)
+                data = Sharepoint(client)
+            else:
+                data = None
+            cache[key] = data
+        return data
 
     def getSharepointSite(self):
-        sharepoint = self.getSharepoint()
-        if not sharepoint:
-            return None
-        return sharepoint.getSiteById(self.getSharepoint_site())
+        cache, key, data = self.getCacheKey('site')
+        if not data:
+            sharepoint = self.getSharepoint()
+            if not sharepoint:
+                return None
+
+            data = sharepoint.getSiteById(self.getSharepoint_site())
+            cache[key] = data
+        return data
 
     def getSharepointList(self):
-        site = self.getSharepointSite()
-        sharepoint_list = self.getSharepoint_list()
-        if not sharepoint_list or not site:
-            return None
-        return site.getListById((sharepoint_list))
-
+        cache, key, data = self.getCacheKey('list')
+        if not data:
+            site = self.getSharepointSite()
+            sharepoint_list = self.getSharepoint_list()
+            if not sharepoint_list or not site:
+                return None
+            data = site.getListById((sharepoint_list))
+            cache[key] = data
+        return data
 
     def getSites(self):
         """return List of sites"""
-        sitelist = []
+        cache, key, data = self.getCacheKey('site-list')
+        if not data:
+            sitelist = []
 
-        sharepoint = self.getSharepoint()
-        if sharepoint:
-            for site in sharepoint.getSitesList():
-                sitelist.append((site.siteId, site.displayName + ' ' + site.webUrl))
+            sharepoint = self.getSharepoint()
+            if sharepoint:
+                for site in sharepoint.getSitesList():
+                    sitelist.append((site.siteId, site.displayName + ' ' + site.webUrl))
 
-        sitelist.sort(key=lambda x: x[1])
-        return atapi.DisplayList(sitelist)
+            sitelist.sort(key=lambda x: x[1])
+            data = atapi.DisplayList(sitelist)
+            cache[key] = data
+        return data
 
     def getLists(self):
         """return List of Lists"""
-        sharepoint = self.getSharepoint()
-        list_o_lists = []
-        if sharepoint:
-            site = self.getSharepointSite()
-            if site:
-                for l in site.getLists():
-                    list_o_lists.append((l.id, l.displayName + ' ' + l.webUrl ))
-        return atapi.DisplayList(list_o_lists)
+        cache, key, data = self.getCacheKey('list-list')
+        if not data:
+            sharepoint = self.getSharepoint()
+            list_o_lists = [('', 'None'),]
+            if sharepoint:
+                site = self.getSharepointSite()
+                if site:
+                    for l in site.getLists():
+                        list_o_lists.append((l.id, l.displayName + ' ' + l.webUrl ))
+            data = atapi.DisplayList(list_o_lists)
+            cache[key] = data
+        return data
+
+    def getDrives(self):
+        """return List of Drives"""
+        cache, key, data = self.getCacheKey('drive-list')
+        if not data:
+            sharepoint = self.getSharepoint()
+            list_o_drives = [('', 'None'),]
+            if sharepoint:
+                site = self.getSharepointSite()
+                if site:
+                    for d in site.getDrives():
+                        list_o_drives.append((d.id, d.name + ' ' + d.webUrl ))
+            data = atapi.DisplayList(list_o_drives)
+            cache[key] = data
+        return data
 
     def getColumns(self):
         """Return list of columns"""
-        target_list = self.getSharepointList()
-        columns = []
-        if not target_list:
-            return []
-        for col in target_list.getColumns():
-            columns.append((col.id, col.displayName))
-        return atapi.DisplayList(columns)
+        cache, key, data = self.getCacheKey('column-list')
+        if not data:
+            target_list = self.getSharepointList()
+            columns = [('', 'None'),]
+            if target_list:
+                for col in target_list.getColumns():
+                    columns.append((col.id, col.displayName))
+            data = atapi.DisplayList(columns)
+            cache[key] = data
+        return data
+
+    def getXMLVariables(self):
+        """Return list of XML Template Variables"""
+        cache, key, data = self.getCacheKey('xml-vars')
+        if not data:
+            variables = [('', 'None'),]
+            if self.xml_template:
+                matches = re.findall(r'\{(.*)\}', self.getXml_template())
+                matches = [(x, x) for x in matches]
+                variables = variables + matches
+
+            data = atapi.DisplayList(variables)
+            cache[key] = data
+        return data
+
+    def getSharepointColFromMap(self, pfg_field):
+        """return the sharepoint column id
+           from the pfg id
+        """
+
+        for x in self.field_map:
+            if x.get('pfg_field') == pfg_field:
+                return x.get('sharepoint_column')
 
 
 
@@ -136,30 +233,35 @@ class SharePointAdapter(FormActionAdapter):
 
     security.declarePrivate('onSuccess')
     def onSuccess(self, fields, REQUEST=None):
-        clientid = get_registry_record(interface=IPFGSharePointConfig, name='clientid')
-        clientsecret = get_registry_record(interface=IPFGSharePointConfig, name='clientsecret')
-        tenants = get_registry_record(interface=IPFGSharePointConfig, name='tenants')
-        client = Client(clientid, teanantid, clientsecret)
         if REQUEST is None:
             REQUEST = self.REQUEST
-        email = REQUEST.form.get(self.email_field, '')
-        if self.sharepoint_list:
-            newsletters = self.subscriptions
-        else:
-            newsletters = REQUEST.form.get(self.newsletters_field, '')
-        #api_key = pprops.tpwd_properties.govdelivery_api_key
-        if not token:
-            raise ValueError('The SharePoint token is not set.')
-        if not self.sharepoint_list:
-            raise ValueError('The SharePoint list is not set.')
-        if not self.sharepoint_site:
-            raise ValueError('The SharePoint site is not set.')
 
-        api_version = 'v1.0'
-        base_url = 'https://graph.microsoft.com/' + api_version + '/sites/'
-        url = '%s?k=%s&e=%s' % (base_url, api_key, email)
-        headers={'Authorization': 'Bearer ' + token}
-        resp = requests.get(url, headers=headers, timeout=2)
-        resp.raise_for_status()
+        field_map = self.getField_map()
+        template = self.getXml_template()
+        drive = self.getSharepoint_drive()
+        sharepoint = self.getSharepoint()
+
+        if template and drive:
+            xml_vars = {}
+            for x in field_map:
+                xml_vars[x['xml_variable']] = REQUEST.form.get(x['pfg_field'])
+            formatted = template.format(**xml_vars)
+            drive = Drive(id=drive, client=sharepoint.client)
+            filename = self.getFilename_string().format(**REQUEST.form)
+            response = drive.upload(filename, formatted)
+
+
+        #target_list = self.getSharepointList()
+
+        #columns = []
+        #for x in field_map:
+        #    sharepoint_column = x.get('sharepoint_column')
+        #    pfg_field = x.get('pfg_field')
+        #    form_field = REQUEST.form.get(pfg_field)
+        #    col = {}
+        #    col['value'] = form_field
+        #    columns.append(col)
+
+
 
 registerATCT(SharePointAdapter, PROJECTNAME)
