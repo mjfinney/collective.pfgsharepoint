@@ -7,10 +7,12 @@ import requests
 from AccessControl import ClassSecurityInfo
 from Products.ATContentTypes.content.base import registerATCT
 from Products.Archetypes import atapi
+from Products.Archetypes.utils import shasattr
 from Products.CMFCore.permissions import ModifyPortalContent
-from Products.PloneFormGen.config import FORM_ERROR_MARKER
+from Products.PloneFormGen.config import FORM_ERROR_MARKER, EDIT_TALES_PERMISSION
 from Products.PloneFormGen.content.actionAdapter import FormActionAdapter
 from Products.PloneFormGen.content.actionAdapter import FormAdapterSchema
+from Products.TALESField import TALESString
 from Products.DataGridField.DataGridField import DataGridField
 from Products.DataGridField.DataGridWidget import DataGridWidget
 from Products.DataGridField.Column import Column
@@ -22,6 +24,7 @@ from msgraph.client import Client
 from msgraph.sharepoint import Sharepoint
 from msgraph.drives import Drive
 
+from collective.pfgsharepoint import _
 from collective.pfgsharepoint import PROJECTNAME
 from collective.pfgsharepoint.interfaces import IPFGSharePointConfig
 
@@ -77,6 +80,31 @@ SharePointAdapterSchema = FormAdapterSchema.copy() + atapi.Schema((
                           label=u'XML Form Template',
                           description=u'This is only used with the Document Library.',
                       )),
+    TALESString('formatScript',
+        schemata='overrides',
+        searchable=0,
+        required=0,
+        validators=('talesvalidator', ),
+        write_permission=EDIT_TALES_PERMISSION,
+        default='',
+        isMetadata=True,
+        languageIndependent=1,
+        widget=atapi.StringWidget(label=_(u'label_BeforeAdapterOverride_text',
+                                    default=u"Before Adapter Script"),
+            description=_(u'help_BeforeAdapterOverride_text', default=\
+                u"A TALES expression that will be called before this adapter runs. "
+                "Form input will be in the request.form dictionary. "
+                "Leave empty if unneeded. "
+                "The most common use of this field is to call a python script "
+                "to clean up form input. "
+                "If the return value is None then the adapter will use request.form "
+                "If the return value is a dictionary then the adapter will use the "
+                "returned dictionary. "
+                "PLEASE NOTE: errors in the evaluation of this expression will "
+                "cause an error on form display."),
+            size=70,
+            ),
+        ),
     DataGridField(
         name='field_map',
         widget=DataGridWidget(
@@ -89,11 +117,13 @@ SharePointAdapterSchema = FormAdapterSchema.copy() + atapi.Schema((
                                                   vocabulary='getColumns'),
                 'xml_variable': SelectColumn(u'XML Template Variable',
                                                   vocabulary='getXMLVariables'),
+                'xml_wrapper': Column(u'XML Template Wrapper',
+                                      col_description=u'Used with items that generate a list'),
                 },
             ),
         allow_empty_rows=False,
         required=False,
-        columns=('pfg_field', 'sharepoint_column', 'xml_variable'),
+        columns=('pfg_field', 'sharepoint_column', 'xml_variable', 'xml_wrapper'),
     ),
 
 ))
@@ -105,6 +135,12 @@ class SharePointAdapter(FormActionAdapter):
     schema = SharePointAdapterSchema
     portal_type = meta_type = 'SharePointAdapter'
     archetype_name = 'SharePoint Adapter'
+
+    def __bobo_traverse__(self, REQUEST, name):
+        # prevent traversal to attributes we want to protect
+        if name == 'formatScript':
+            raise AttributeError
+        return super(SharePointAdapter, self).__bobo_traverse__(REQUEST, name)
 
     def getCacheKey(self, key):
         key = "sharepoint-" + key + self.UID()
@@ -241,19 +277,34 @@ class SharePointAdapter(FormActionAdapter):
         if REQUEST is None:
             REQUEST = self.REQUEST
 
+        if shasattr(self, 'formatScript') and self.getRawFormatScript():
+            # formatScript has a TALES override
+            form = self.getFormatScript()
+        else:
+            form = REQUEST.form
+
         field_map = self.getField_map()
-        template = self.getXml_template()
+        template = self.getRawXml_template()
         drive = self.getSharepoint_drive()
         sharepoint = self.getSharepoint()
 
         if template and drive:
             xml_vars = {}
             for x in field_map:
-                xml_vars[x['xml_variable']] = REQUEST.form.get(x['pfg_field'])
+                wrapper = x.get('xml_wrapper')
+                if wrapper:
+                    to_wrap = form.get(x['pfg_field'])
+                    wrapped = ''
+                    for value in to_wrap:
+                        wrapped += '<{wrapper}>{value}</{wrapper}>'.format(wrapper=wrapper, value=value)
+                    xml_vars[x['xml_variable']] = wrapped
+                else:
+                    xml_vars[x['xml_variable']] = form.get(x['pfg_field'])
+
             formatted = template.format(**xml_vars)
             drive = Drive(id=drive, client=sharepoint.client)
             now = datetime.now().strftime('%y-%m-%d-%H-%M-%S-%f')
-            filename = self.getFilename_string().format(now=now, **REQUEST.form)
+            filename = self.getFilename_string().format(now=now, **form)
             filename = filename.replace(':', '-')
             filename = quote_plus(filename)
             response = drive.upload(filename, formatted)
