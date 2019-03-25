@@ -21,7 +21,9 @@ from plone.api.portal import get_registry_record
 from zope.annotation.interfaces import IAnnotations
 
 from msgraph.client import Client
-from msgraph.sharepoint import Sharepoint
+from msgraph.sharepoint import (Sharepoint,
+                                SharepointDateTimeColumn,
+                                SharepointChoiceColumn,)
 from msgraph.drives import Drive
 
 from collective.pfgsharepoint import _
@@ -114,16 +116,12 @@ SharePointAdapterSchema = FormAdapterSchema.copy() + atapi.Schema((
                 'pfg_field': SelectColumn(u'PFG Field',
                                           vocabulary='fgFieldsDisplayList',),
                 'sharepoint_column': SelectColumn(u'Sharepoint Column',
-                                                  vocabulary='getColumns'),
-                'xml_variable': SelectColumn(u'XML Template Variable',
-                                                  vocabulary='getXMLVariables'),
-                'xml_wrapper': Column(u'XML Template Wrapper',
-                                      col_description=u'Used with items that generate a list'),
+                                                  vocabulary='getColumnsVocab'),
                 },
             ),
         allow_empty_rows=False,
         required=False,
-        columns=('pfg_field', 'sharepoint_column', 'xml_variable', 'xml_wrapper'),
+        columns=('pfg_field', 'sharepoint_column'),
     ),
 
 ))
@@ -237,9 +235,20 @@ class SharePointAdapter(FormActionAdapter):
         cache, key, data = self.getCacheKey('column-list')
         if not data:
             target_list = self.getSharepointList()
-            columns = [('', 'None'),]
             if target_list:
-                for col in target_list.getColumns():
+                data = target_list.getColumns()
+
+            cache[key] = data
+        return data
+
+    def getColumnsVocab(self):
+        """Return list of columns"""
+        cache, key, data = self.getCacheKey('column-vocab')
+        if not data:
+            columns_list = self.getColumns()
+            columns = [('', 'None'),]
+            if columns_list:
+                for col in columns_list:
                     columns.append((col.id, col.displayName))
             data = atapi.DisplayList(columns)
             cache[key] = data
@@ -284,45 +293,58 @@ class SharePointAdapter(FormActionAdapter):
             form = REQUEST.form
 
         field_map = self.getField_map()
-        template = self.getRawXml_template()
-        drive = self.getSharepoint_drive()
+        #template = self.getRawXml_template()
+        #drive = self.getSharepoint_drive()
         sharepoint = self.getSharepoint()
 
-        if template and drive:
-            xml_vars = {}
-            for x in field_map:
-                wrapper = x.get('xml_wrapper')
-                if wrapper:
-                    to_wrap = form.get(x['pfg_field'])
-                    wrapped = ''
-                    for value in to_wrap:
-                        wrapped += '<{wrapper}>{value}</{wrapper}>'.format(wrapper=wrapper, value=value)
-                    xml_vars[x['xml_variable']] = wrapped
-                else:
-                    xml_vars[x['xml_variable']] = form.get(x['pfg_field'])
+        #if template and drive:
+        #    xml_vars = {}
+        #    for x in field_map:
+        #        wrapper = x.get('xml_wrapper')
+        #        if wrapper:
+        #            to_wrap = form.get(x['pfg_field'])
+        #            wrapped = ''
+        #            for value in to_wrap:
+        #                wrapped += '<{wrapper}>{value}</{wrapper}>'.format(wrapper=wrapper, value=value)
+        #            xml_vars[x['xml_variable']] = wrapped
+        #        else:
+        #            xml_vars[x['xml_variable']] = form.get(x['pfg_field'])
 
-            formatted = template.format(**xml_vars)
-            drive = Drive(id=drive, client=sharepoint.client)
+        #    formatted = template.format(**xml_vars)
+        #    drive = Drive(id=drive, client=sharepoint.client)
+        #    now = datetime.now().strftime('%y-%m-%d-%H-%M-%S-%f')
+        #    filename = self.getFilename_string().format(now=now, **form)
+        #    filename = filename.replace(':', '-')
+        #    filename = quote_plus(filename)
+        #    response = drive.upload(filename, formatted)
+        #    if not response.ok:
+        #        return {FORM_ERROR_MARKER: 'Something went wrong. You will need to try to submit again or correct any errors below.'}
+
+
+        target_list = self.getSharepointList()
+
+        if target_list:
+            columns = self.getColumns()
+            columns = dict(zip(map(lambda x: x.id,columns),columns))
+            col_lookup = dict(zip(map(lambda x: x.get('pfg_field'),field_map),field_map))
+            cols = {}
             now = datetime.now().strftime('%y-%m-%d-%H-%M-%S-%f')
-            filename = self.getFilename_string().format(now=now, **form)
-            filename = filename.replace(':', '-')
-            filename = quote_plus(filename)
-            response = drive.upload(filename, formatted)
-            if not response.ok:
-                return {FORM_ERROR_MARKER: 'Something went wrong. You will need to try to submit again or correct any errors below.'}
-
-
-        #target_list = self.getSharepointList()
-
-        #columns = []
-        #for x in field_map:
-        #    sharepoint_column = x.get('sharepoint_column')
-        #    pfg_field = x.get('pfg_field')
-        #    form_field = REQUEST.form.get(pfg_field)
-        #    col = {}
-        #    col['value'] = form_field
-        #    columns.append(col)
-
+            cols['Title'] = self.getFilename_string().format(now=now, **form)
+            for x in fields:
+                col = col_lookup.get(x.id)
+                if col:
+                    sharepoint_column = columns.get(col.get('sharepoint_column'))
+                    if isinstance(sharepoint_column, SharepointChoiceColumn):
+                        form_value = form.get(x.id)
+                        cols[sharepoint_column.name + '@odata.type'] = 'Collection(Edm.String)'
+                    elif isinstance(sharepoint_column, SharepointDateTimeColumn):
+                        form_value = form.get(x.id)
+                        form_value = datetime.strptime(form_value, '%Y-%d-%m %H:%M')
+                        form_value = form_value.isoformat()
+                    else:
+                        form_value = x.htmlValue(REQUEST)
+                    cols[sharepoint_column.name] = form_value
+            response = target_list.createItem(fields=cols)
 
 
 registerATCT(SharePointAdapter, PROJECTNAME)
