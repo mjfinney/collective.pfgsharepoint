@@ -339,7 +339,7 @@ class SharePointAdapter(FormActionAdapter):
                         cols[sharepoint_column.name + '@odata.type'] = 'Collection(Edm.String)'
                     elif isinstance(sharepoint_column, SharepointDateTimeColumn):
                         form_value = form.get(x.id)
-                        form_value = datetime.strptime(form_value, '%Y-%d-%m %H:%M')
+                        form_value = datetime.strptime(form_value, '%Y-%m-%d %H:%M')
                         form_value = form_value.isoformat()
                     else:
                         form_value = x.htmlValue(REQUEST)
