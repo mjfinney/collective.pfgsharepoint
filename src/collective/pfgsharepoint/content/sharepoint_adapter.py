@@ -1,4 +1,5 @@
 from datetime import datetime
+import logging
 import re
 from urllib import quote_plus
 
@@ -29,6 +30,8 @@ from msgraph.drives import Drive
 from collective.pfgsharepoint import _
 from collective.pfgsharepoint import PROJECTNAME
 from collective.pfgsharepoint.interfaces import IPFGSharePointConfig
+
+logger = logging.getLogger('collective.pfgsharepoint')
 
 SharePointAdapterSchema = FormAdapterSchema.copy() + atapi.Schema((
     atapi.StringField('sharepoint_tenant',
@@ -351,7 +354,11 @@ class SharePointAdapter(FormActionAdapter):
                                     pass
                                 else:
                                     break
-                            form_value = form_value.isoformat()
+                            try:
+                                form_value = form_value.isoformat()
+                            except AttributeError:
+                                logger.error("Attribute error with field: %s with value: %s", x, form_value)
+                                raise
                     else:
                         form_value = x.htmlValue(REQUEST)
                     if form_value:
