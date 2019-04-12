@@ -392,7 +392,8 @@ class SharePointAdapter(FormActionAdapter):
                         continue
                     now = datetime.now().strftime('%y-%m-%d-%H-%M-%S-%f')
                     filename = response.json().get('id') + '-' + upload_instance.filename
-                    upload_response = drive.upload(filename, body)
+                    ct = upload_instance.headers.getheader('Content-Type')
+                    upload_response = drive.upload(filename, body, ct)
                     if not upload_response.ok:
                         return {FORM_ERROR_MARKER: 'Something went wrong with the file upload. You will need to try to submit again or correct any errors below.'}
 
