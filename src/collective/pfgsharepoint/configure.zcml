@@ -49,11 +49,6 @@
     name="collective.pfgsharepoint.vocabularies.SharepointTenants"
     />
 
-  <utility
-    component=".vocabularies.SharepointSiteVocabularyFactory"
-    name="collective.pfgsharepoint.vocabularies.SharepointSites"
-    />
-
   <!-- -*- extra stuff goes here -*- -->
 
 </configure>

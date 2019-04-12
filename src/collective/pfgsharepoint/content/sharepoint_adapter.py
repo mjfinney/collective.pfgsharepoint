@@ -18,18 +18,15 @@ from Products.DataGridField.DataGridField import DataGridField
 from Products.DataGridField.DataGridWidget import DataGridWidget
 from Products.DataGridField.Column import Column
 from Products.DataGridField.SelectColumn import SelectColumn
-from plone.api.portal import get_registry_record
 from zope.annotation.interfaces import IAnnotations
 
-from msgraph.client import Client
 from msgraph.sharepoint import (Sharepoint,
                                 SharepointDateTimeColumn,
                                 SharepointChoiceColumn,)
 from msgraph.drives import Drive
 
-from collective.pfgsharepoint import _
-from collective.pfgsharepoint import PROJECTNAME
-from collective.pfgsharepoint.interfaces import IPFGSharePointConfig
+from collective.pfgsharepoint import _, PROJECTNAME
+from collective.pfgsharepoint.utils import getClient
 
 logger = logging.getLogger('collective.pfgsharepoint')
 
@@ -65,7 +62,16 @@ SharePointAdapterSchema = FormAdapterSchema.copy() + atapi.Schema((
                       vocabulary='getDrives',
                       widget=atapi.SelectionWidget(
                           label=u'SharePoint Document Library AKA Drive ID',
-                          description=u'This is where an XML document will be uploaded using the XML Form Template.',
+                          description=u'This is where any attachments will be uploaded.',
+                      )),
+    atapi.StringField('upload_field',
+                      required=False,
+                      write_permission=ModifyPortalContent,
+                      read_permission=ModifyPortalContent,
+                      vocabulary='fgFieldsDisplayList',
+                      widget=atapi.SelectionWidget(
+                          label=u'File Upload Field',
+                          description=u'This must be a datagrid field with a file upload field.',
                       )),
     atapi.StringField('filename_string',
                       required=False,
@@ -76,14 +82,6 @@ SharePointAdapterSchema = FormAdapterSchema.copy() + atapi.Schema((
                           description=u'The name the xml fromt template will be uploaded as. \
                                         The form fields are available using the python string format e.g. {field-id} \
                                         Use {now} for the submission datetime.',
-                      )),
-    atapi.TextField('xml_template',
-                      required=False,
-                      write_permission=ModifyPortalContent,
-                      read_permission=ModifyPortalContent,
-                      widget=atapi.TextAreaWidget(
-                          label=u'XML Form Template',
-                          description=u'This is only used with the Document Library.',
                       )),
     TALESString('formatScript',
         schemata='overrides',
@@ -127,6 +125,23 @@ SharePointAdapterSchema = FormAdapterSchema.copy() + atapi.Schema((
         columns=('pfg_field', 'sharepoint_column'),
     ),
 
+    #DataGridField(
+    #    name='upload_field_map',
+    #    widget=DataGridWidget(
+    #        label=u'Field Map',
+    #        description=u"Map the PFG field to the Sharepoint list column.",
+    #        columns={
+    #            'pfg_field': SelectColumn(u'PFG Field',
+    #                                      vocabulary='fgFieldsDisplayList',),
+    #            'sharepoint_column': SelectColumn(u'Sharepoint Column',
+    #                                              vocabulary='getDriveColumns'),
+    #            },
+    #        ),
+    #    allow_empty_rows=False,
+    #    required=False,
+    #    columns=('pfg_field', 'sharepoint_column'),
+    #),
+
 ))
 
 
@@ -149,16 +164,14 @@ class SharePointAdapter(FormActionAdapter):
         cache = IAnnotations(self.REQUEST)
         return (cache, key, cache.get(key, None))
 
+
+
     def getSharepoint(self):
         cache, key, data = self.getCacheKey('sharepoint')
         if not data:
-            clientid = get_registry_record(interface=IPFGSharePointConfig,
-                                           name='clientid')
-            clientsecret = get_registry_record(interface=IPFGSharePointConfig,
-                                               name='clientsecret')
             tenantid = self.getSharepoint_tenant()
             if tenantid:
-                client = Client(clientid, tenantid, clientsecret)
+                client = getClient(tenantid)
                 data = Sharepoint(client)
             else:
                 data = None
@@ -257,20 +270,6 @@ class SharePointAdapter(FormActionAdapter):
             cache[key] = data
         return data
 
-    def getXMLVariables(self):
-        """Return list of XML Template Variables"""
-        cache, key, data = self.getCacheKey('xml-vars')
-        if not data:
-            variables = [('', 'None'),]
-            if self.xml_template:
-                matches = re.findall(r'\{(.*)\}', self.getXml_template())
-                matches = [(x, x) for x in matches]
-                variables = variables + matches
-
-            data = atapi.DisplayList(variables)
-            cache[key] = data
-        return data
-
     def getSharepointColFromMap(self, pfg_field):
         """return the sharepoint column id
            from the pfg id
@@ -279,6 +278,25 @@ class SharePointAdapter(FormActionAdapter):
         for x in self.field_map:
             if x.get('pfg_field') == pfg_field:
                 return x.get('sharepoint_column')
+
+    #def getDriveColumns(self):
+    #    cache, key, data = self.getCacheKey('drive-vocab')
+    #    if not data:
+    #        drive = self.getSharepoint_drive()
+    #        site = self.getSharepointSite()
+    #        if not drive or not site:
+    #            return None
+    #        drive_list = site.getListById(drive)
+    #        columns = [('', 'None'),]
+    #        if drive_list:
+    #            drive_columns = drive_list.getColumns()
+    #            if drive_columns:
+    #                for col in drive_columns:
+    #                    columns.append((col.id, col.displayName))
+    #        data = atapi.DisplayList(columns)
+    #        cache[key] = data
+    #    return data
+
 
 
 
@@ -296,8 +314,7 @@ class SharePointAdapter(FormActionAdapter):
             form = REQUEST.form
 
         field_map = self.getField_map()
-        #template = self.getRawXml_template()
-        #drive = self.getSharepoint_drive()
+        drive = self.getSharepoint_drive()
         sharepoint = self.getSharepoint()
 
         #if template and drive:
@@ -333,6 +350,7 @@ class SharePointAdapter(FormActionAdapter):
             cols = {}
             now = datetime.now().strftime('%y-%m-%d-%H-%M-%S-%f')
             cols['Title'] = self.getFilename_string().format(now=now, **form)
+            upload_field = self.getUpload_field()
             for x in fields:
                 col = col_lookup.get(x.id)
                 if col:
@@ -364,6 +382,19 @@ class SharePointAdapter(FormActionAdapter):
                     if form_value:
                         cols[sharepoint_column.name] = form_value
             response = target_list.createItem(fields=cols)
+            if response.ok and upload_field:
+                form_value = form.get(x.id)
+                drive = Drive(id=drive, client=sharepoint.client)
+                for f in form_value:
+                    upload_instance = f.get('file')
+                    body = upload_instance.read()
+                    if (not body) or (not upload_instance.filename):
+                        continue
+                    now = datetime.now().strftime('%y-%m-%d-%H-%M-%S-%f')
+                    filename = response.json().get('id') + '-' + upload_instance.filename
+                    upload_response = drive.upload(filename, body)
+                    if not upload_response.ok:
+                        return {FORM_ERROR_MARKER: 'Something went wrong with the file upload. You will need to try to submit again or correct any errors below.'}
 
 
 registerATCT(SharePointAdapter, PROJECTNAME)

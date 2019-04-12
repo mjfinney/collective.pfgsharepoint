@@ -29,20 +29,3 @@ class SharepointTenantVocabulary(object):
         return SimpleVocabulary(tenants)
 
 SharepointTenantVocabularyFactory = SharepointTenantVocabulary()
-
-class SharepointSiteVocabulary(object):
-
-    implements(IVocabularyFactory)
-
-    def __call__(self, context, query=None):
-        clientid = get_registry_record(interface=IPFGSharePointConfig, name='clientid')
-        clientsecret = get_registry_record(interface=IPFGSharePointConfig, name='clientsecret')
-        import pdb; pdb.set_trace()
-        client = Client(clientid, teanantid, clientsecret)
-
-        tenants = get_registry_record(interface=IPFGSharePointConfig, name="tenants")
-        tenants = [SimpleTerm(t, t, props.get('displayName', t)) for t,props in tenants.items()]
-        return SimpleVocabulary(tenants)
-
-SharepointSiteVocabularyFactory = SharepointSiteVocabulary()
-
