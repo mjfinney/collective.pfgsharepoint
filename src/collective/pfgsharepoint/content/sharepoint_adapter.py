@@ -382,6 +382,9 @@ class SharePointAdapter(FormActionAdapter):
                     if form_value:
                         cols[sharepoint_column.name] = form_value
             response = target_list.createItem(fields=cols)
+            if not response.ok:
+                logger.error("Error submitting sharepoint form: %s", response.text)
+                return {FORM_ERROR_MARKER: 'An error occured while trying to submit your form. Please try to submit again..'}
             if response.ok and upload_field:
                 form_value = form.get(x.id)
                 drive = Drive(id=drive, client=sharepoint.client)
@@ -395,6 +398,7 @@ class SharePointAdapter(FormActionAdapter):
                     ct = upload_instance.headers.getheader('Content-Type')
                     upload_response = drive.upload(filename, body, ct)
                     if not upload_response.ok:
+                        logger.error("Error uploading attachments: %s", upload_response.text)
                         return {FORM_ERROR_MARKER: 'Something went wrong with the file upload. You will need to try to submit again or correct any errors below.'}
 
 
