@@ -359,7 +359,7 @@ class SharePointAdapter(FormActionAdapter):
                         form_value = form.get(x.id)
                         cols[sharepoint_column.name + '@odata.type'] = 'Collection(Edm.String)'
                     elif isinstance(sharepoint_column, SharepointDateTimeColumn):
-                        form_value = form.get(x.id)
+                        form_value = form.get(x.id + '-processed', form.get(x.id))
                         formats = ['%Y-%m-%d %H:%M',
                                    '%m/%d/%Y',
                                    '%m/%d/%Y %I:%M %p',
