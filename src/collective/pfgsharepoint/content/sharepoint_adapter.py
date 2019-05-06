@@ -363,6 +363,7 @@ class SharePointAdapter(FormActionAdapter):
                         formats = ['%Y-%m-%d %H:%M',
                                    '%m/%d/%Y',
                                    '%m/%d/%Y %I:%M %p',
+                                   '%m/%d/%Y %I:%M%p',
                                    ]
                         if form_value:
                             for f in formats:
