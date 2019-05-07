@@ -388,7 +388,7 @@ class SharePointAdapter(FormActionAdapter):
                 logger.error("Error submitting sharepoint form: %s", response.text)
                 return {FORM_ERROR_MARKER: 'An error occured while trying to submit your form. Please try to submit again..'}
             if response.ok and upload_field:
-                form_value = form.get(x.id)
+                form_value = form.get(upload_field)
                 drive = Drive(id=drive, client=sharepoint.client)
                 for f in form_value:
                     upload_instance = f.get('file')
