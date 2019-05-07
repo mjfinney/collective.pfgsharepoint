@@ -1,5 +1,6 @@
 from datetime import datetime
 import logging
+from os import path
 import re
 from urllib import quote_plus
 
@@ -395,7 +396,10 @@ class SharePointAdapter(FormActionAdapter):
                     if (not body) or (not upload_instance.filename):
                         continue
                     now = datetime.now().strftime('%y-%m-%d-%H-%M-%S-%f')
-                    filename = response.json().get('id') + '-' + upload_instance.filename
+                    # Some windows machines are uploading with the full path
+                    # This should get just the filename in either case
+                    filename = path.split(upload_instance.filename)[-1]
+                    filename = response.json().get('id') + '-' + filename
                     ct = upload_instance.headers.getheader('Content-Type')
                     upload_response = drive.upload(filename, body, ct)
                     if not upload_response.ok:
