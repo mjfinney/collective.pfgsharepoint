@@ -396,9 +396,10 @@ class SharePointAdapter(FormActionAdapter):
                     if (not body) or (not upload_instance.filename):
                         continue
                     now = datetime.now().strftime('%y-%m-%d-%H-%M-%S-%f')
-                    # Some windows machines are uploading with the full path
-                    # This should get just the filename in either case
-                    filename = path.split(upload_instance.filename)[-1]
+                    filename = upload_instance.filename
+                    # IE has the entire path instead of just the filename
+                    # This should get just the filename
+                    filename = filename[filename.rfind('\\')+1:].strip()
                     filename = response.json().get('id') + '-' + filename
                     ct = upload_instance.headers.getheader('Content-Type')
                     upload_response = drive.upload(filename, body, ct)
