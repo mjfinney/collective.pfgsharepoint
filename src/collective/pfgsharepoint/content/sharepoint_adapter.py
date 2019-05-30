@@ -359,6 +359,8 @@ class SharePointAdapter(FormActionAdapter):
                     if isinstance(sharepoint_column, SharepointChoiceColumn):
                         form_value = form.get(x.id)
                         cols[sharepoint_column.name + '@odata.type'] = 'Collection(Edm.String)'
+                    elif x.__class__.__name__ == 'FGMultiSelectField':
+                        form_value = ', '.join(form.get(x.id))
                     elif isinstance(sharepoint_column, SharepointDateTimeColumn):
                         form_value = form.get(x.id + '-processed', form.get(x.id))
                         formats = ['%Y-%m-%d %H:%M',
